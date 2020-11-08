@@ -27,7 +27,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     GridView listView;
     BookArrayAdapter bookArrayAdapter;
 
-    private String LOG_TAG = MainActivity.class.getName();
+    private static String LOG_TAG = MainActivity.class.getName();
 
     private static int BOOK_LOADER_ID = 1;
 
@@ -43,25 +43,27 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         setContentView(R.layout.activity_main);
 
         listView = (GridView) findViewById(R.id.listView);
+        bookArrayAdapter = new BookArrayAdapter(this, R.layout.list_item,
+                new ArrayList<Book>());
+        listView.setAdapter(bookArrayAdapter);
 
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Book currBook = (Book) bookArrayAdapter.getItem(position);
+                Uri bookUri = Uri.parse(currBook.getInfoLink());
+                Intent webIntent = new Intent(Intent.ACTION_VIEW, bookUri);
+                startActivity(webIntent);
+            }
+        });
+
+        // Check if internet is connected
         if(!internetConnected(this)){
+            Log.e(LOG_TAG, "Internet Not Connected");
             listView.setEmptyView(findViewById(R.id.no_internet));
         }else {
-            bookArrayAdapter = new BookArrayAdapter(this, R.layout.list_item,
-                    new ArrayList<Book>());
-            listView.setAdapter(bookArrayAdapter);
+            Log.e(LOG_TAG, "Internet Connected");
             listView.setEmptyView(findViewById(R.id.search_for_books));
-
-
-            listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                @Override
-                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                    Book currBook = (Book) bookArrayAdapter.getItem(position);
-                    Uri bookUri = Uri.parse(currBook.getInfoLink());
-                    Intent webIntent = new Intent(Intent.ACTION_VIEW, bookUri);
-                    startActivity(webIntent);
-                }
-            });
 
             loaderManager = getSupportLoaderManager();
 
@@ -71,19 +73,42 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
             Log.e(LOG_TAG, "Initialising Loader Manager");
             loaderManager.initLoader(BOOK_LOADER_ID, null, this);
         }
-
-
     }
 
+    private static boolean internetConnected(Context context){
+
+        Log.e(LOG_TAG, "Checking Internet Connection");
+
+        ConnectivityManager cm =
+                (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        boolean isConnected = activeNetwork != null &&
+                activeNetwork.isConnectedOrConnecting();
+        return  isConnected;
+    }
+
+
+    /*
+    LoaderManager.LoaderCallbacks<List<Book>> methods
+     */
 
     @NonNull
     @Override
     public Loader<List<Book>> onCreateLoader(int id, @Nullable Bundle args) {
 
-        updateQueryUrl();
-        bookArrayAdapter.clear();
         Log.e(LOG_TAG, "Creating Loader");
-        return new BookLoader(this, queryUrl.toString());
+
+        String queryUrlString;
+
+        if(queryUrl!=null){
+            queryUrlString = queryUrl.toString();
+        }else{
+            queryUrlString = null;
+        }
+
+        return new BookLoader(this, queryUrlString);
+
     }
 
     @Override
@@ -91,10 +116,12 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         Log.e(LOG_TAG, "Loader creation finished");
 
         // Clear the adapter of previous book data
-        bookArrayAdapter.clear();
+        bookArrayAdapter.clear(); // ListView is now empty
+
         if(data!=null && !data.isEmpty()){
             bookArrayAdapter.addAll(data);
         }else{
+            // No books found
             listView.setEmptyView(findViewById(R.id.no_books));
         }
     }
@@ -106,6 +133,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     }
 
     private void updateQueryUrl(){
+        // bookArrayAdapter is already clear
         EditText searchEditText = (EditText) findViewById(R.id.searchEditText);
         String searchTerm = searchEditText.getText().toString();
 
@@ -113,13 +141,12 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         queryUrl.append(GOOGLE_BOOKS_API_URL);
 
         if(searchTerm==null || searchTerm.isEmpty()){
-            bookArrayAdapter.clear();
             listView.setEmptyView(findViewById(R.id.search_for_books));
 //            queryUrl.append("coding");
 //            queryUrl.append("&maxResults=5");
         }else{
             queryUrl.append(searchTerm);
-            queryUrl.append("&maxResults=25");
+            queryUrl.append("&maxResults=6");
         }
 
     }
@@ -130,20 +157,13 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
 
     public void onClick(View view){
         bookArrayAdapter.clear();
+
         findViewById(R.id.search_for_books).setVisibility(View.GONE);
+        findViewById(R.id.no_books).setVisibility(View.GONE);
+
         listView.setEmptyView(findViewById(R.id.progressBar));
         updateQueryUrl();
         restartLoader();
-    }
-
-    private static boolean internetConnected(Context context){
-        ConnectivityManager cm =
-                (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
-
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-        boolean isConnected = activeNetwork != null &&
-                activeNetwork.isConnectedOrConnecting();
-        return  isConnected;
     }
 
 }
